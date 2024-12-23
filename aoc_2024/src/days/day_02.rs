@@ -1,4 +1,4 @@
-#[derive(PartialEq, Clone)]
+#[derive(PartialEq, Clone, Debug)]
 enum LevelDirection {
     INCREASING,
     DECREASING,
@@ -20,14 +20,13 @@ fn level_is_safe(direction: LevelDirection, previous_level: i32, current_level: 
     }
 }
 
-fn report_is_safe(report: &str) -> bool {
-    let mut safe = true;
-    let mut levels = report.split(" ");
-    let mut previous_level = levels.next().unwrap().parse::<i32>().unwrap();
+fn unsafe_level_count(levels: Vec<i32>) -> i32 {
+    let mut count = 0;
+    let mut previous_level = levels[0];
     let mut direction: Option<LevelDirection> = None;
 
-    while let Some(level) = levels.next() {
-        let current_level = level.parse::<i32>().unwrap();
+    for i in 1..levels.len() {
+        let current_level = levels[i];
 
         if direction == None {
             if current_level > previous_level {
@@ -37,11 +36,50 @@ fn report_is_safe(report: &str) -> bool {
             }
         }
 
-        safe = safe && level_is_safe(direction.clone().unwrap(), previous_level, current_level);
-        previous_level = current_level;
+        let is_safe = level_is_safe(direction.clone().unwrap(), previous_level, current_level);
+
+        if !is_safe {
+            count += 1;
+        } else {
+            previous_level = current_level;
+        }
     }
 
-    safe
+    count
+}
+
+fn is_report_safe(threshold: i32, report: &str) -> bool {
+    let levels = report
+        .split(" ")
+        .map_while(|level| level.parse::<i32>().ok())
+        .collect::<Vec<i32>>();
+
+    if levels.len() < 1 {
+        return false;
+    }
+
+    let unsafe_levels = unsafe_level_count(levels.clone());
+    if unsafe_levels < threshold {
+        return true;
+    }
+
+    for i in 0..levels.len() {
+        let (left, right) = levels.split_at(i);
+        let mut left = left.to_vec();
+        let mut right = right
+            .split_first()
+            .map(|(_, rest)| rest.to_vec())
+            .unwrap_or(Vec::new());
+
+        left.append(&mut right);
+
+        let unsafe_levels = unsafe_level_count(left.clone()) + 1;
+        if unsafe_levels < threshold {
+            return true;
+        }
+    }
+
+    false
 }
 
 // https://adventofcode.com/2024/day/1
@@ -50,7 +88,21 @@ pub fn part_01(reports: String) -> i32 {
     let mut safe_reports = 0;
 
     for report in reports.lines() {
-        if report_is_safe(report) {
+        if is_report_safe(1, report) {
+            safe_reports += 1;
+        }
+    }
+
+    safe_reports
+}
+
+// https://adventofcode.com/2024/day/1#part2
+#[allow(dead_code)]
+pub fn part_02(reports: String) -> i32 {
+    let mut safe_reports = 0;
+
+    for report in reports.lines() {
+        if is_report_safe(2, report) {
             safe_reports += 1;
         }
     }
@@ -105,5 +157,36 @@ mod tests {
         let result = part_01(contents);
 
         assert_eq!(result, 230);
+    }
+
+    #[test]
+    fn test_part_02_01() {
+        // https://adventofcode.com/2024/day/2
+        assert_eq!(part_02("7 6 4 2 1".to_owned()), 1);
+        assert_eq!(part_02("1 2 7 8 9".to_owned()), 0);
+        assert_eq!(part_02("9 7 6 2 1".to_owned()), 0);
+        assert_eq!(part_02("1 3 2 4 5".to_owned()), 1);
+        assert_eq!(part_02("8 6 4 4 1".to_owned()), 1);
+        assert_eq!(part_02("1 3 6 7 9".to_owned()), 1);
+
+        assert_eq!(
+            part_02(
+                "7 6 4 2 1\n1 2 7 8 9\n9 7 6 2 1\n1 3 2 4 5\n8 6 4 4 1\n1 3 6 7 9\n".to_owned()
+            ),
+            4
+        );
+
+        assert_eq!(part_02("0 4 6 7 9".to_owned()), 1);
+        assert_eq!(part_02("9 3 6 7 9".to_owned()), 1);
+    }
+
+    #[test]
+    fn test_part_02_02() {
+        // https://adventofcode.com/2024/day/2/input
+        let contents = fs::read_to_string("./input/day_02_2.txt").expect("unable to read file");
+
+        let result = part_02(contents);
+
+        assert_eq!(result, 301);
     }
 }
