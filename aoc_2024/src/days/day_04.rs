@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[allow(dead_code)]
 fn next_char_in_string(string: &String, substring: &String) -> Option<char> {
     if string.len() == substring.len() {
@@ -46,11 +48,8 @@ fn check(
     row: usize,
     column: usize,
     coord_stepper: fn(usize, usize) -> (usize, usize),
-) -> Option<bool> {
-    if *string_to_match == substring {
-        return Some(true);
-    }
-
+    start: (usize, usize),
+) -> Option<((usize, usize), (usize, usize))> {
     if row >= matrix.len() || column >= matrix.get(row)?.len() {
         return None;
     }
@@ -60,11 +59,34 @@ fn check(
 
     if expected == actual {
         substring.push(actual);
+
+        if *string_to_match == substring {
+            return Some((start, (row, column)));
+        }
+
         let (row, column) = coord_stepper(row, column);
-        return check(matrix, string_to_match, substring, row, column, coord_stepper);
+        return check(
+            matrix,
+            string_to_match,
+            substring,
+            row,
+            column,
+            coord_stepper,
+            start,
+        );
     }
 
     None
+}
+
+fn find_mid_point(
+    (start_x, start_y): (usize, usize),
+    (end_x, end_y): (usize, usize),
+) -> (f32, f32) {
+    let x = (start_x as f32 + end_x as f32) / 2.0;
+    let y = (start_y as f32 + end_y as f32) / 2.0;
+
+    (x, y)
 }
 
 // https://adventofcode.com/2024/day/4
@@ -72,15 +94,17 @@ fn check(
 pub fn part_01(contents: String) -> i32 {
     let string_to_match = String::from("XMAS");
     let matrix = string_to_matrix(contents);
-    let mut count = 0;
+    let mut match_coord_pairs = vec![];
 
+    // closures to step through coords around the current position
+    // vertical, horizontal, and diagonal
     let coord_steppers: Vec<Box<fn(usize, usize) -> (usize, usize)>> = vec![
         Box::new(|row, column| (row.wrapping_sub(1), column)),
-        Box::new(|row, column| (row.wrapping_sub(1), column + 1)),
-        Box::new(|row, column| (row, column + 1)),
-        Box::new(|row, column| (row + 1, column + 1)),
-        Box::new(|row, column| (row + 1, column)),
-        Box::new(|row, column| (row + 1, column.wrapping_sub(1))),
+        Box::new(|row, column| (row.wrapping_sub(1), column.wrapping_add(1))),
+        Box::new(|row, column| (row, column.wrapping_add(1))),
+        Box::new(|row, column| (row.wrapping_add(1), column.wrapping_add(1))),
+        Box::new(|row, column| (row.wrapping_add(1), column)),
+        Box::new(|row, column| (row.wrapping_add(1), column.wrapping_sub(1))),
         Box::new(|row, column| (row, column.wrapping_sub(1))),
         Box::new(|row, column| (row.wrapping_sub(1), column.wrapping_sub(1))),
     ];
@@ -90,27 +114,75 @@ pub fn part_01(contents: String) -> i32 {
 
         for character_index in 0..row.len() {
             for coord_stepper in &coord_steppers {
-                if let Some(_) = check(
+                if let Some((start, end)) = check(
                     &matrix,
                     &string_to_match,
                     String::new(),
                     row_index,
                     character_index,
                     **coord_stepper,
+                    (row_index, character_index),
                 ) {
-                    count += 1;
+                    match_coord_pairs.push((start, end));
                 }
             }
         }
     }
 
-    count
+    match_coord_pairs.len() as i32
 }
 
 // https://adventofcode.com/2024/day/4#part2
 #[allow(dead_code)]
-pub fn part_02(_contents: String) -> i32 {
-    0
+pub fn part_02(contents: String) -> i32 {
+    let string_to_match = String::from("MAS");
+    let matrix = string_to_matrix(contents);
+    let mut match_coord_pairs = vec![];
+
+    // closures to step through coords around the current position
+    // only diagonal
+    let coord_steppers: Vec<Box<fn(usize, usize) -> (usize, usize)>> = vec![
+        Box::new(|row, column| (row.wrapping_sub(1), column.wrapping_add(1))),
+        Box::new(|row, column| (row.wrapping_add(1), column.wrapping_add(1))),
+        Box::new(|row, column| (row.wrapping_add(1), column.wrapping_sub(1))),
+        Box::new(|row, column| (row.wrapping_sub(1), column.wrapping_sub(1))),
+    ];
+
+    for row_index in 0..matrix.len() {
+        let row = matrix.get(row_index).unwrap();
+
+        for character_index in 0..row.len() {
+            for coord_stepper in &coord_steppers {
+                if let Some((start, end)) = check(
+                    &matrix,
+                    &string_to_match,
+                    String::new(),
+                    row_index,
+                    character_index,
+                    **coord_stepper,
+                    (row_index, character_index),
+                ) {
+                    match_coord_pairs.push((start, end));
+                }
+            }
+        }
+    }
+
+    let mut match_coord_groups: HashMap<String, usize> = HashMap::new();
+    for match_coord_pair in &match_coord_pairs {
+        let ((start_x, start_y), (end_x, end_y)) = match_coord_pair;
+        let (mid_x, mid_y) = find_mid_point((*start_x, *start_y), (*end_x, *end_y));
+
+        let key = format!("({}, {})", mid_x, mid_y);
+        let count = match_coord_groups.get(&key).unwrap_or(&0);
+        match_coord_groups.insert(key, count + 1);
+    }
+
+    // how many groups had more than one member
+    match_coord_groups
+        .values()
+        .filter(|&&count| count > 1)
+        .count() as i32
 }
 
 #[cfg(test)]
@@ -175,6 +247,13 @@ MXMXAXMASX"
     }
 
     #[test]
+    fn test_find_mid_point_01() {
+        assert_eq!(find_mid_point((0, 0), (0, 0)), (0., 0.));
+        assert_eq!(find_mid_point((1, 1), (3, 3)), (2., 2.));
+        assert_eq!(find_mid_point((2, 3), (8, 6)), (5., 4.5));
+    }
+
+    #[test]
     fn test_part_01_01() {
         // https://adventofcode.com/2024/day/4
         let contents: String = "
@@ -205,18 +284,27 @@ MXMXAXMASX"
         assert_eq!(result, 2358);
     }
 
-    #[ignore]
     #[test]
     fn test_part_02_01() {
         // https://adventofcode.com/2024/day/4#part2
-        let contents: String = "".to_owned();
+        let contents: String = "
+.M.S......
+..A..MSMS.
+.M.S.MAA..
+..A.ASMSM.
+.M.S.M....
+..........
+S.S.S.S.S.
+.A.A.A.A..
+M.M.M.M.M.
+.........."
+            .to_owned();
 
         let result = part_02(contents);
 
-        assert_eq!(result, 0);
+        assert_eq!(result, 9);
     }
 
-    #[ignore]
     #[test]
     fn test_part_02_02() {
         // https://adventofcode.com/2024/day/4/input
@@ -224,6 +312,6 @@ MXMXAXMASX"
 
         let result = part_02(contents);
 
-        assert_eq!(result, 0);
+        assert_eq!(result, 1737);
     }
 }
