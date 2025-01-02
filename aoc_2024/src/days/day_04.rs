@@ -1,3 +1,4 @@
+use crate::helpers::string_to_matrix;
 use std::collections::HashMap;
 
 #[allow(dead_code)]
@@ -25,11 +26,6 @@ fn next_char_in_string(string: &String, substring: &String) -> Option<char> {
     }
 
     None
-}
-
-#[allow(dead_code)]
-fn string_to_matrix(string: String) -> Vec<Vec<char>> {
-    string.lines().map(|line| line.chars().collect()).collect()
 }
 
 #[allow(dead_code)]
